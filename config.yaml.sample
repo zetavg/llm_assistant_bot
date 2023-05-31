@@ -1,0 +1,4 @@
+port: 3582
+
+slack_signing_secret: 'fill_me'
+slack_bot_user_oauth_token: 'fill_me'
