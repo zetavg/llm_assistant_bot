@@ -6,7 +6,7 @@ class Config:
     Stores the application configuration. This is a singleton class.
     """
 
-    port: int = 3000
+    slack_bot_port: int = 3000
 
     slack_bot_user_oauth_token: str = ''
     slack_signing_secret: str = ''
