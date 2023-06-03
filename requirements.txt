@@ -1,5 +1,14 @@
 fire==0.5.0
+pytz
 pyyaml
+langchain==0.0.188
+openai
+playwright
+beautifulsoup4
+lxml
+readability-lxml
+markdownify
+commonmark-slack
 slack_sdk==3.21.3
 slack_bolt>=1.6.1
 certifi

@@ -6,6 +6,12 @@ class Config:
     Stores the application configuration. This is a singleton class.
     """
 
+    timezone: str = 'Atlantic/Reykjavik'
+
+    openai_api_key: str = ''
+
+    agent_max_execution_time: int = 30
+
     slack_bot_port: int = 3000
 
     slack_bot_user_oauth_token: str = ''

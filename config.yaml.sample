@@ -1,3 +1,10 @@
+timezone: Asia/Taipei
+
+# Get your API key from https://platform.openai.com/account/api-keys.
+openai_api_key: 'fill_me'
+
+agent_max_execution_time: 180
+
 slack_bot_port: 3582
 
 slack_signing_secret: 'fill_me'

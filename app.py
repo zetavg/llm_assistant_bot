@@ -7,6 +7,9 @@ import threading
 from llm_assistant_bot.config import Config, set_config
 from llm_assistant_bot.slack_bot import get_slack_bot_app
 
+import nest_asyncio
+nest_asyncio.apply()
+
 app_dir = os.path.dirname(os.path.abspath(__file__))
 default_config_path = os.path.join(app_dir, 'config.yaml')
 
@@ -21,7 +24,8 @@ def main(config_path: str = default_config_path):
     print(f"Config loaded from {config_path}.")
 
     logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)
+    # logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
     logger.addHandler(logging.StreamHandler())
 
     slack_bot_app = get_slack_bot_app()
@@ -29,8 +33,10 @@ def main(config_path: str = default_config_path):
     def run_slack_bot():
         slack_bot_app.start(Config.slack_bot_port)
 
-    bot_thread = threading.Thread(target=run_slack_bot)
-    bot_thread.start()
+    # bot_thread = threading.Thread(target=run_slack_bot)
+    # bot_thread.start()
+    run_slack_bot()
+    print('okokokokokokok')
 
 
 def read_yaml_config(config_path: str):
