@@ -12,8 +12,9 @@ from langchain.agents import (
 )
 from langchain.prompts import StringPromptTemplate
 from langchain.schema import AgentAction, AgentFinish
-from langchain.memory import ConversationBufferWindowMemory
+from langchain.memory import ConversationSummaryBufferMemory, ConversationBufferWindowMemory
 from langchain.utilities import PythonREPL
+import tiktoken
 
 from ..config import Config
 from .tools.python_repl import get_python_repl_tool
@@ -22,23 +23,45 @@ from .tools.web_browsing import get_browser_tools
 logger = logging.getLogger("agent")
 
 
-def get_llm():
-    if Config.agent.llm_type == 'openai':
-        if Config.agent.llm_model_name in ['gpt-4', 'gpt-4-32k']:
+def get_llm(model_type, model_name):
+    if model_type == 'openai':
+        if model_name in ['gpt-4', 'gpt-4-32k']:
             return ChatOpenAI(
-                model=Config.agent.llm_model_name,
-                temperature=0
+                model=model_name,
+                temperature=0,
+                max_tokens=Config.agent.max_generate_tokens,
             )  # type: ignore
-        elif Config.agent.llm_model_name == 'text-davinci-003':
+        elif model_name == 'text-davinci-003':
             return OpenAI(
                 model='text-davinci-003',
-                temperature=0
+                temperature=0,
+                max_tokens=Config.agent.max_generate_tokens,
             )  # type: ignore
         else:
             raise ValueError(
-                f'Invalid LLM model name: {Config.agent.llm_model_name}')
+                f'Invalid LLM model name: {model_name}')
     else:
-        raise ValueError(f'Invalid LLM type: {Config.agent.llm_type}')
+        raise ValueError(f'Invalid LLM type: {model_type}')
+
+
+def get_llm_max_token_limit(model_type, model_name):
+    if model_type == 'openai':
+        if model_name == 'gpt-4':
+            return 8192
+        elif model_name == 'text-davinci-003':
+            return 4096
+        else:
+            raise ValueError(
+                f'Invalid LLM model name: {model_name}')
+    else:
+        raise ValueError(f'Invalid LLM type: {model_type}')
+
+
+def get_llm_tokenizer(model_type, model_name):
+    if model_type == 'openai':
+        return tiktoken.encoding_for_model(model_name)
+    else:
+        raise ValueError(f'Invalid LLM type: {model_type}')
 
 
 class Agent():
@@ -46,6 +69,16 @@ class Agent():
         self,
         use_tool_callback: Union[Callable[[str, Any], Any], None] = None
     ):
+        self.llm = get_llm(Config.agent.llm_type, Config.agent.llm_model_name)
+        self.llm_max_token_limit = get_llm_max_token_limit(
+            Config.agent.llm_type, Config.agent.llm_model_name
+        )
+        self.tokenizer = get_llm_tokenizer(
+            Config.agent.llm_type, Config.agent.llm_model_name
+        )
+        llm_max_token_limit = self.llm_max_token_limit
+        tokenizer = self.tokenizer
+
         # Setup tools
         browser_tools = get_browser_tools()
         python_repl_tool = get_python_repl_tool()
@@ -73,11 +106,11 @@ class Agent():
                 thoughts = ""
                 for i, (action, observation) in enumerate(intermediate_steps):
                     thoughts += action.log
-                    if (
-                        i < intermediate_steps_len - 1
-                        and len(observation) > 512
-                    ):
-                        observation = observation[:512] + '\n  ... (observation content truncated)'
+                    if i < intermediate_steps_len - 1:
+                        tokenized_observation = tokenizer.encode(observation)
+                        if len(tokenized_observation) > Config.agent.old_observation_max_token_limit:
+                            observation = tokenizer.decode(tokenized_observation[:Config.agent.old_observation_max_token_limit]) + \
+                                '\n  ... (observation content truncated)'
                     thoughts += f"\nObservation: {observation}\nThought: "
                 # Set the agent_scratchpad variable to that value
                 kwargs["agent_scratchpad"] = thoughts
@@ -102,6 +135,21 @@ class Agent():
                     )
 
                 prompt = prompt_template.format(**kwargs)
+
+                tokenized_prompt = tokenizer.encode(prompt)
+                token_limit = llm_max_token_limit - (Config.agent.max_generate_tokens + 20)
+                prompt_truncated = False
+                if len(tokenized_prompt) > token_limit:
+                    tokenized_prompt_truncated = \
+                        tokenized_prompt[:token_limit]
+                    prompt = tokenizer.decode(tokenized_prompt_truncated)
+                    prompt += '\n  ... (truncated)\nThought:'
+                    prompt_truncated = True
+
+                if prompt_truncated:
+                    logger.info(f"Prompt length (truncated): {len(tokenized_prompt_truncated)} tokens (original: {len(tokenized_prompt)}) tokens")
+                else:
+                    logger.info(f"Prompt length: {len(tokenized_prompt)} tokenx")
 
                 if kwargs.get('agent_scratchpad'):
                     logger.debug(
@@ -156,8 +204,6 @@ class Agent():
 
         self.output_parser = OutputParser()
 
-        self.llm = get_llm()
-
         # LLM chain consisting of the LLM and a prompt
         self.llm_chain = LLMChain(
             llm=self.llm,
@@ -171,7 +217,7 @@ class Agent():
             allowed_tools=self.tool_names,  # type: ignore
         )
 
-    def get_agent_executor(self, memory: ConversationBufferWindowMemory):
+    def get_agent_executor(self, memory: ConversationSummaryBufferMemory):
         agent_executor = AgentExecutor.from_agent_and_tools(
             agent=self.agent,
             tools=self.tools,
@@ -182,4 +228,11 @@ class Agent():
         return agent_executor
 
     def get_new_memory(self):
-        return ConversationBufferWindowMemory(k=Config.agent.memory_k)
+        llm = get_llm(
+            Config.agent.conversation_memory_llm_type,
+            Config.agent.conversation_memory_llm_model_name,
+        )
+        return ConversationSummaryBufferMemory(
+            llm=llm,
+            max_token_limit=Config.agent.conversation_memory_max_token_limit,
+        )

@@ -7,10 +7,15 @@ log_level: info
 
 agent:
   max_execution_time: 180
-  memory_k: 12
+  max_generate_tokens: 512
+  conversation_memory_max_token_limit: 800
+  old_observation_max_token_limit: 100
+
   llm_type: openai
   # text-davinci-003, gpt-4 or gpt-4-32k
   llm_model_name: text-davinci-003
+  conversation_memory_llm_type: openai
+  conversation_memory_llm_model_name: text-davinci-003
 
   history_template: |
 

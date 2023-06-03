@@ -139,6 +139,27 @@ def get_slack_bot_app():
                         await client.users_info(user=user_id)
                 return user_info_cache[user_id]
 
+            async def replace_user_mentions(msg):
+                # Find all mentions
+                mention_ids = re.findall(r"<@([a-zA-Z0-9]+)>", msg)
+
+                # Get user info for each mention
+                user_infos = await asyncio.gather(
+                    *(get_user_info(user_id) for user_id in mention_ids)
+                )
+
+                # Create a mapping from mention to user info
+                mention_id_to_name = {
+                    f"<@{user_id}>": f"@{info['user']['real_name']}"
+                    for user_id, info in zip(mention_ids, user_infos)
+                }
+
+                # Replace each mention with its corresponding user info
+                for user_id, user_name in mention_id_to_name.items():
+                    msg = msg.replace(user_id, user_name)
+
+                return msg
+
             history = []
             for message in thread_replies.get('messages', []):
                 if message['ts'] == message_ts:
@@ -150,21 +171,27 @@ def get_slack_bot_app():
                         message['user'] == bot_id
                         and not message['text'].startswith('_(')
                     ):
+                        msg = message['text']
+                        msg = await replace_user_mentions(msg)
                         history.append({
                             'from': 'bot',
-                            'message': message['text']
+                            'message': msg,
                         })
                     # Messages not from this bot are ignored.
 
                 else:
                     user_info = await get_user_info(message['user'])
+                    msg = message['text']
+                    msg = message['text'].replace(
+                        bot_mention, bot_mention_replacement)
+                    msg = await replace_user_mentions(msg)
                     history.append({
                         'from': 'user',
                         'user_id': message['user'],
                         # 'user_id': user_info['user']['id'],
                         'user_name': user_info['user']['real_name'],
                         # 'user_display_name': user_info['user']['profile']['display_name'],
-                        'message': message['text'].replace(bot_mention, bot_mention_replacement),
+                        'message': msg,
                     })
 
             logger.debug(
@@ -184,6 +211,7 @@ def get_slack_bot_app():
                     message = message.strip()
                     memory.chat_memory.add_ai_message(message)
 
+            memory.prune()
             ai_started_at = time.time()
             agent_executor = agent.get_agent_executor(
                 memory=memory
@@ -192,7 +220,8 @@ def get_slack_bot_app():
             user_info = await get_user_info(event['user'])
             user_name = user_info['user']['real_name']
             reply = await agent_executor.arun(
-                f"@{user_name}: {text}".replace(bot_mention, bot_mention_replacement)
+                f"@{user_name}: {text}".replace(bot_mention,
+                                                bot_mention_replacement)
             )
             ai_ended_at = time.time()
 

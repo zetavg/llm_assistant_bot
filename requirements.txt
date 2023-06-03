@@ -3,6 +3,7 @@ pytz
 pyyaml
 langchain==0.0.188
 openai
+tiktoken
 playwright
 beautifulsoup4
 lxml
