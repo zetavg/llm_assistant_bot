@@ -69,9 +69,15 @@ class Agent():
                 # Get the intermediate steps (AgentAction, Observation tuples)
                 # Format them in a particular way
                 intermediate_steps = kwargs.pop("intermediate_steps")
+                intermediate_steps_len = len(intermediate_steps)
                 thoughts = ""
-                for action, observation in intermediate_steps:
+                for i, (action, observation) in enumerate(intermediate_steps):
                     thoughts += action.log
+                    if (
+                        i < intermediate_steps_len - 1
+                        and len(observation) > 512
+                    ):
+                        observation = observation[:512] + '\n  ... (observation content truncated)'
                     thoughts += f"\nObservation: {observation}\nThought: "
                 # Set the agent_scratchpad variable to that value
                 kwargs["agent_scratchpad"] = thoughts
