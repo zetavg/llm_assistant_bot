@@ -9,7 +9,7 @@ agent:
   max_execution_time: 180
   memory_k: 12
   llm_type: openai
-  # text-davinci-003 or gpt-4
+  # text-davinci-003, gpt-4 or gpt-4-32k
   llm_model_name: text-davinci-003
 
   history_template: |

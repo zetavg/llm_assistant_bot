@@ -57,6 +57,8 @@ def get_slack_bot_app():
 
         bot_info = await get_bot_info(client)
         bot_id = bot_info["user_id"]
+        bot_mention = f"<@{bot_id}>"
+        bot_mention_replacement = '@bot'
 
         channel_id = event.get("channel")
         user_id = event.get("user")
@@ -162,7 +164,7 @@ def get_slack_bot_app():
                         # 'user_id': user_info['user']['id'],
                         'user_name': user_info['user']['real_name'],
                         # 'user_display_name': user_info['user']['profile']['display_name'],
-                        'message': message['text'],
+                        'message': message['text'].replace(bot_mention, bot_mention_replacement),
                     })
 
             logger.debug(
@@ -190,12 +192,12 @@ def get_slack_bot_app():
             user_info = await get_user_info(event['user'])
             user_name = user_info['user']['real_name']
             reply = await agent_executor.arun(
-                f"@{user_name}: {text}"
+                f"@{user_name}: {text}".replace(bot_mention, bot_mention_replacement)
             )
             ai_ended_at = time.time()
 
-            if not is_direct_message:
-                reply = f"<@{user_id}> {reply}"
+            if not is_direct_message and f"@{user_name}" not in reply:
+                reply = f"@{user_name} {reply}"
 
             reply_text = convert_markdown_to_slack(reply)
 
@@ -206,6 +208,7 @@ def get_slack_bot_app():
                 thread_ts=message_ts,  # Should always reply in the thread.
                 text=reply_text,
                 mrkdwn=True,
+                link_names=True,
             )
         except Exception as e:
             time_elapsed = 0

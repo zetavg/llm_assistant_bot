@@ -24,9 +24,9 @@ logger = logging.getLogger("agent")
 
 def get_llm():
     if Config.agent.llm_type == 'openai':
-        if Config.agent.llm_model_name == 'gpt-4':
+        if Config.agent.llm_model_name in ['gpt-4', 'gpt-4-32k']:
             return ChatOpenAI(
-                model='gpt-4',
+                model=Config.agent.llm_model_name,
                 temperature=0
             )  # type: ignore
         elif Config.agent.llm_model_name == 'text-davinci-003':
