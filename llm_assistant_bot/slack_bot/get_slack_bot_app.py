@@ -16,36 +16,6 @@ from ..config import Config
 TYPING_MESSAGE_TEXT = "_(thinking...)_"
 
 
-# def convert_markdown_to_slack(text):
-#     # commonmarkslack will make content in code fences disappear.
-#     # So we replace code fences with a temporary placeholder.
-#     text = text.replace('```', '程式碼\x1f區塊')
-#     parser = commonmarkslack.Parser()
-#     ast = parser.parse(text)
-#     renderer = commonmarkslack.SlackRenderer()
-#     slack_md = renderer.render(ast)
-
-#     # Replace the temporary placeholder back with code fences.
-#     slack_md = slack_md.replace('程式碼\x1f區塊', '```')
-#     return slack_md
-
-def _convert_markdown_to_slack(text):
-    parser = commonmarkslack.Parser()
-    ast = parser.parse(text)
-    renderer = commonmarkslack.SlackRenderer()
-    slack_md = renderer.render(ast)
-    return slack_md
-
-
-def convert_markdown_to_slack(text):
-    texts = text.split('```')
-    # Do not convert markdown in code fences.
-    texts = [
-        _convert_markdown_to_slack(t) if i % 2 == 0 else t
-        for i, t in enumerate(texts)]
-    return '```'.join(texts)
-
-
 def get_slack_bot_app():
     logger = logging.getLogger("slack_bot")
 
@@ -67,8 +37,8 @@ def get_slack_bot_app():
         return cached_bot_info
 
     app = AsyncApp(
-        token=Config.slack_bot_user_oauth_token,
-        signing_secret=Config.slack_signing_secret,
+        token=Config.slack.bot_user_oauth_token,
+        signing_secret=Config.slack.signing_secret,
     )
 
     @app.event("reaction_added")
@@ -97,7 +67,8 @@ def get_slack_bot_app():
 
         is_direct_message = True
 
-        # Check if this is a direct message by checking if the channel ID starts with 'D'
+        # Check if this is a direct message by checking if the channel ID
+        # starts with 'D'
         if not channel_id.startswith('D'):
             is_direct_message = False
             # In channels or group direct messages, do not reply if the bot
@@ -105,6 +76,9 @@ def get_slack_bot_app():
             if f"<@{bot_id}>" not in text:
                 return
 
+        # Send a 'thinking...' message to indicate that the bot is working.
+        # This message will also be used to report the execution status of
+        # the bot, and will be deleted once a reply is sent.
         send_typing_message_task = asyncio.create_task(
             client.chat_postMessage(
                 channel=channel_id,
@@ -113,6 +87,8 @@ def get_slack_bot_app():
             )
         )
 
+        # A function to update the 'thinking...' message to report the current
+        # status.
         async def update_status_async(status):
             typing_message = await send_typing_message_task
             message_ts = typing_message['ts']
@@ -122,20 +98,36 @@ def get_slack_bot_app():
                 text=f'_({status})_'
             )
 
+        # A function to update the 'thinking...' message to report the current
+        # status, with no async.
         def update_status(status):
             return asyncio.create_task(
                 update_status_async(status)
             )
 
+        # A callback function that will be called when the agent is using a
+        # tool.
+        def use_tool_callback(tool_name, input):
+            if tool_name == 'python_repl':
+                update_status(f'Executing Python code...')
+            elif tool_name == 'browser_google_search':
+                update_status(f'Searching "{input}" on Google...')
+            elif tool_name == 'browser_navigate':
+                if len(input) > 40:
+                    input = f"<{input}|{input[:40] + '...'}>"
+                update_status(f'Browsing "{input}"...')
+
+        agent = Agent(use_tool_callback=use_tool_callback)
+
+        def get_info_message(time_elapsed):
+            return f"\n_(Model: {agent.llm.model_name}, time elapsed: {time_elapsed:.1f}s)_"
+
+        ai_started_at = None
         try:
             thread_replies = await client.conversations_replies(
                 channel=channel_id,
                 ts=thread_ts
             )
-
-            # print('--------')
-            # print('thread_replies', thread_replies)
-            # print('--------')
 
             user_info_cache = {}
 
@@ -161,6 +153,7 @@ def get_slack_bot_app():
                             'message': message['text']
                         })
                     # Messages not from this bot are ignored.
+
                 else:
                     user_info = await get_user_info(message['user'])
                     history.append({
@@ -177,7 +170,7 @@ def get_slack_bot_app():
                 json.dumps(history, indent=2, ensure_ascii=False)
             )
 
-            memory = ConversationBufferWindowMemory(k=8)
+            memory = agent.get_new_memory()
             for h in history:
                 if h['from'] == 'user':
                     memory.chat_memory.add_user_message(
@@ -189,18 +182,7 @@ def get_slack_bot_app():
                     message = message.strip()
                     memory.chat_memory.add_ai_message(message)
 
-            def use_tool_callback(tool_name, input):
-                if tool_name == 'python_repl':
-                    update_status(f'Executing Python code...')
-                elif tool_name == 'browser_google_search':
-                    update_status(f'Searching "{input}" on Google...')
-                elif tool_name == 'browser_navigate':
-                    if len(input) > 40:
-                        input = f"<{input[:40] + '...'}|{input}>"
-                    update_status(f'Browsing "{input}"...')
-
             ai_started_at = time.time()
-            agent = Agent(use_tool_callback=use_tool_callback)
             agent_executor = agent.get_agent_executor(
                 memory=memory
             )
@@ -211,14 +193,13 @@ def get_slack_bot_app():
                 f"@{user_name}: {text}"
             )
             ai_ended_at = time.time()
-            # reply = f"I received a message from you! You said:\n> {text}"
 
             if not is_direct_message:
                 reply = f"<@{user_id}> {reply}"
 
             reply_text = convert_markdown_to_slack(reply)
 
-            reply_text += f"\n_(Model: {agent.llm.model_name}, time elapsed: {ai_ended_at - ai_started_at:.1f}s)_"
+            reply_text += get_info_message(ai_ended_at - ai_started_at)
 
             return await client.chat_postMessage(
                 channel=channel_id,
@@ -227,18 +208,28 @@ def get_slack_bot_app():
                 mrkdwn=True,
             )
         except Exception as e:
+            time_elapsed = 0
+            if ai_started_at:
+                time_elapsed = time.time() - ai_started_at
+
             exception = Exception(
                 str(e) + f'. Event: {str(event)}'
             )
             error_message = str(e)
+
             if isinstance(e, asyncio.exceptions.TimeoutError):
-                error_message = f"agent operation timeout (> {Config.agent_max_execution_time} seconds)"
+                error_message = f"agent operation timeout (> {Config.agent.max_execution_time} seconds)"
+
             error_message = error_message.replace('\n', ' ')
+            error_message_text = f"_⚠ An error occurred: {error_message}_"
+            error_message_text += get_info_message(time_elapsed)
+
             await client.chat_postMessage(
                 channel=channel_id,
                 thread_ts=message_ts,  # Should always reply in the thread.
-                text=f"_⚠ An error occurred: {error_message}_",
+                text=error_message_text,
             )
+
             raise exception from e
         finally:
             typing_message = await send_typing_message_task
@@ -248,3 +239,22 @@ def get_slack_bot_app():
             )
 
     return app
+
+
+def convert_markdown_to_slack(text):
+    # commonmarkslack will make content in code fences disappear.
+    # This is a workaround to prevent that.
+    texts = text.split('```')
+    # Do not convert markdown in code fences.
+    texts = [
+        _convert_markdown_to_slack(t) if i % 2 == 0 else t
+        for i, t in enumerate(texts)]
+    return '```'.join(texts)
+
+
+def _convert_markdown_to_slack(text):
+    parser = commonmarkslack.Parser()
+    ast = parser.parse(text)
+    renderer = commonmarkslack.SlackRenderer()
+    slack_md = renderer.render(ast)
+    return slack_md

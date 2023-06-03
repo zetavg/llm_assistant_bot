@@ -16,68 +16,29 @@ from langchain.memory import ConversationBufferWindowMemory
 from langchain.utilities import PythonREPL
 
 from ..config import Config
-from ..tools.web_browsing import get_browser_tools
+from .tools.python_repl import get_python_repl_tool
+from .tools.web_browsing import get_browser_tools
 
 logger = logging.getLogger("agent")
 
-template_without_history = """Here is a new message from the user:
 
-```
-{input}
-```
-
-Your name is AssistantGPT. As a professional assistant of the team, reply the message as best you can. You have access to the following tools:
-
-{tools}
-
-Use the following format:
-
-```
-Message: the input message you should answer
-Thought: you should always think about what to do
-Action: the action to take, should be one of [{tool_names}]
-Action Input: the input to the action
-Observation: the result of the action
-... (this Thought/Action/Action Input/Observation can repeat N times, and can be omitted if unnecessary)
-Thought: I now know how to reply
-Final Reply: the final reply to the original input message
-```
-
-If using a tool is not necessary, you can omit the Action/Action Input/Observation steps and go straight to the Final Reply, for example:
-
-```
-Message: Hi!
-Thought: This is a friendly greeting, I should respond in kind
-Thought: I now know how to reply
-Final Reply: Hi there! How can I help you?
-```
-
-Every "Thought: ..." MUST be followed by a "Action: ..." or a "Final Reply: ...".
-
-Here are some additional rules you should follow:
-
-0. Do not make up any information. If you cannot find a confident answer from the conversation history or observation, you should amiably tell the user that you cannot find the answer.
-1. If you are referencing any documents when making your reply, you should ALWAYS include the link to the document in the Final Reply.
-1. You MUST use standard Markdown syntax when writing your reply. You MUST NOT follow the format in the conversation history. You MUST use the syntax `[text](url)` for links.
-2. When being asked questions referring to a relative date, you MUST use an absolute date (based on the given current date) during your thought. Additionally, you MUST use absolute date when using tools (such as browser_google_search).
-3. Use the same language as the user. If the user is using Chinese, prefer Traditional Chinese (Taiwanese Mandarin) over Simplified Chinese unless you are sure that the user is using Simplified Chinese.
-4. Use whitespace between CJK (Chinese, Japanese, Korean) and half-width characters (alphabetical letters, numerical digits and symbols). For example, do not write: "當你凝視著bug，bug也凝視著你", do: "當你凝視著 bug，bug 也凝視著你".
-5. You should not use the 'python_repl' tool if unnecessary. Use it only if you need to do something such as math calculation.
-6. You MUST NOT use the 'python_repl' tool to execute code that is too complex or takes too long to run.
-7. You MUST include the content of the final Reply in the Final Reply step, you MUST NOT ask the user to check elsewhere for the result.
-8. When you are giving sample code to the user, you should place it in a markdown code block.
-
-Begin!
-
-{agent_scratchpad}"""
-
-template = """```
-{history}
-```
-
-Above is the conversation history between you (AI) and user(s) (Human). Note that the "Human" user might be different individuals, in such case, the user's name will be annotated in the message, such as: "Human: @username: This is the message from @username".
-
-""" + template_without_history
+def get_llm():
+    if Config.agent.llm_type == 'openai':
+        if Config.agent.llm_model_name == 'gpt-4':
+            return ChatOpenAI(
+                model='gpt-4',
+                temperature=0
+            )  # type: ignore
+        elif Config.agent.llm_model_name == 'text-davinci-003':
+            return OpenAI(
+                model='text-davinci-003',
+                temperature=0
+            )  # type: ignore
+        else:
+            raise ValueError(
+                f'Invalid LLM model name: {Config.agent.llm_model_name}')
+    else:
+        raise ValueError(f'Invalid LLM type: {Config.agent.llm_type}')
 
 
 class Agent():
@@ -87,16 +48,7 @@ class Agent():
     ):
         # Setup tools
         browser_tools = get_browser_tools()
-
-        python_repl = PythonREPL()
-        async def python_repl_arun(command):
-            return python_repl.run(command)
-        python_repl_tool = Tool(
-            name="python_repl",
-            description="A Python shell. Use this to execute python commands. Input should be a valid python command. You must use `print(...)` in order to see the output. Do not use this if unnecessary.",
-            func=python_repl.run,
-            coroutine=python_repl_arun,
-        )
+        python_repl_tool = get_python_repl_tool()
 
         self.tools = [
             python_repl_tool,
@@ -129,15 +81,21 @@ class Agent():
                 # Create a list of tool names for the tools provided
                 kwargs["tool_names"] = ", ".join([tool.name for tool in tools])
 
-                if not kwargs.get('history'):
-                    kwargs_without_history = kwargs.copy()
-                    kwargs_without_history.pop('history')
-                    prompt = template_without_history.format(
-                        **kwargs_without_history)
-                else:
-                    prompt = template.format(**kwargs)
+                kwargs["current_date"] = date_str
+                kwargs["knowledge_cutoff_date"] = '2021-01-01'
+                kwargs["timezone"] = Config.timezone
 
-                prompt = f"Current date: {date_str}\n\n" + prompt
+                if not kwargs.get('history'):
+                    prompt_template = Config.agent.prompt_template.replace(
+                        r'%%HISTORY%%', ''
+                    )
+                else:
+                    prompt_template = Config.agent.prompt_template.replace(
+                        r'%%HISTORY%%',
+                        Config.agent.history_template.format(**kwargs) + '\n'
+                    )
+
+                prompt = prompt_template.format(**kwargs)
 
                 if kwargs.get('agent_scratchpad'):
                     logger.debug(
@@ -149,10 +107,8 @@ class Agent():
                 return prompt
 
         self.prompt_template = PromptTemplate(
-            # template=template,
-            # tools=tools,
-            # # This omits the `agent_scratchpad`, `tools`, and `tool_names` variables because those are generated dynamically
-            # # This includes the `intermediate_steps` variable because that is needed
+            # This omits the `agent_scratchpad`, `tools`, and `tool_names` variables because those are generated dynamically
+            # This includes the `intermediate_steps` variable because that is needed
             input_variables=["input", "intermediate_steps", "history"],
         )
 
@@ -194,14 +150,7 @@ class Agent():
 
         self.output_parser = OutputParser()
 
-        self.llm = ChatOpenAI(
-            model='gpt-4',
-            temperature=0
-        )  # type: ignore
-        # self.llm = OpenAI(
-        #     model='text-davinci-003',
-        #     temperature=0
-        # )  # type: ignore
+        self.llm = get_llm()
 
         # LLM chain consisting of the LLM and a prompt
         self.llm_chain = LLMChain(
@@ -222,6 +171,9 @@ class Agent():
             tools=self.tools,
             verbose=True,
             memory=memory,
-            max_execution_time=Config.agent_max_execution_time,
+            max_execution_time=Config.agent.max_execution_time,
         )
         return agent_executor
+
+    def get_new_memory(self):
+        return ConversationBufferWindowMemory(k=Config.agent.memory_k)

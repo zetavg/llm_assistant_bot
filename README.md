@@ -7,7 +7,7 @@ After preparing the environment (such as `conda create python=3.8 -n llm_assista
 1. `pip install -r requirements.txt`.
 2. `playwright install`.
 3. `cp config.yaml.sample config.yaml` and fill in the blanks.
-4. `python app.py`.
+4. `python slack_bot.py`.
 
 ## Chat Integrations
 
