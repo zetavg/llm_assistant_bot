@@ -135,24 +135,16 @@ class Agent():
                 )
 
                 if not kwargs['memories']:
-                    prompt_template = prompt_template.replace(
-                        r'%%MEMORIES%%', ''
-                    )
-                else:
-                    prompt_template = prompt_template.replace(
-                        r'%%MEMORIES%%',
+                    kwargs['memories'] = ''
+                elif Config.agent.memories_template:
+                    kwargs['memories'] = \
                         Config.agent.memories_template.format(**kwargs) + '\n'
-                    )
 
                 if not kwargs.get('history'):
-                    prompt_template = prompt_template.replace(
-                        r'%%HISTORY%%', ''
-                    )
-                else:
-                    prompt_template = prompt_template.replace(
-                        r'%%HISTORY%%',
+                    kwargs['history'] = ''
+                elif Config.agent.history_template:
+                    kwargs['history'] = \
                         Config.agent.history_template.format(**kwargs) + '\n'
-                    )
 
                 prompt = prompt_template.format(**kwargs)
 
@@ -169,7 +161,7 @@ class Agent():
                 if prompt_truncated:
                     logger.info(f"Prompt length (truncated): {len(tokenized_prompt_truncated)} tokens (original: {len(tokenized_prompt)}) tokens")
                 else:
-                    logger.info(f"Prompt length: {len(tokenized_prompt)} tokenx")
+                    logger.info(f"Prompt length: {len(tokenized_prompt)} tokens")
 
                 if kwargs.get('agent_scratchpad'):
                     logger.debug(

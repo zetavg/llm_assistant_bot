@@ -48,7 +48,7 @@ agent:
 
   prompt_template: |
     Your name is AssistantGPT. You are a professional assistant on the team. You are having a conversation with a user via an instant messaging app.
-    %%HISTORY%%
+    {history}
     Here is the new message from the user:
 
     --------------------
@@ -58,7 +58,7 @@ agent:
     Reply the message as best you can. You have access to the following tools:
 
     {tools}
-    %%MEMORIES%%
+    {memories}
     Use the following format to draft your reply:
 
     ```
