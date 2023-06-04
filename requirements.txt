@@ -1,7 +1,9 @@
 fire==0.5.0
+ipython
 pytz
 pyyaml
 langchain==0.0.188
+chromadb==0.3.25
 openai
 tiktoken
 playwright

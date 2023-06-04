@@ -2,6 +2,7 @@ import typing
 from typing import Type, Any, Dict
 
 from .agent_config import AgentConfig
+from .chromadb_config import ChromaDBConfig
 from .slack_config import SlackConfig
 
 
@@ -17,6 +18,7 @@ class Config:
     log_level: str = 'info'
 
     agent: Type[AgentConfig] = AgentConfig
+    chromadb: Type[ChromaDBConfig] = ChromaDBConfig
     slack: Type[SlackConfig] = SlackConfig
 
 
@@ -34,6 +36,8 @@ def set_config(config_dict: Dict[str, Any], target=Config, key_prefix=''):
             type_hint.__module__ not in ['builtins', 'typing']
             or getattr(type_hint, '__origin__', None) is type
         ):
+            if value is None:
+                continue
             if not isinstance(value, dict):
                 raise TypeError(
                     f"Expect type for config '{key_prefix}{key}' to be dict, got '{type(value)}'.")

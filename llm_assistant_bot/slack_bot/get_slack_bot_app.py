@@ -107,10 +107,21 @@ def get_slack_bot_app():
                 update_status_async(status)
             )
 
+        memorized = []
+
         # A callback function that will be called when the agent is using a
         # tool.
         def use_tool_callback(tool_name, input):
-            if tool_name == 'python_repl':
+            if tool_name == 'memorize':
+                memorized.append(input)
+                if len(input) > 40:
+                    input = f"<{input}|{input[:40] + '...'}>"
+                update_status(f'Memorizing "{input}"...')
+            elif tool_name == 'check_memory':
+                if len(input) > 40:
+                    input = f"<{input}|{input[:40] + '...'}>"
+                    update_status(f'Thinking about "{input}"...')
+            elif tool_name == 'python_repl':
                 update_status(f'Executing Python code...')
             elif tool_name == 'browser_google_search':
                 update_status(f'Searching "{input}" on Google...')
@@ -229,6 +240,10 @@ def get_slack_bot_app():
                 reply = f"@{user_name} {reply}"
 
             reply_text = convert_markdown_to_slack(reply)
+
+            if memorized:
+                reply_text += '\n> Memorized:\n> '
+                reply_text += ', '.join(memorized).replace('\n', ' ')
 
             reply_text += get_info_message(ai_ended_at - ai_started_at)
 

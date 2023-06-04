@@ -17,6 +17,8 @@ from langchain.utilities import PythonREPL
 import tiktoken
 
 from ..config import Config
+from ..db import query_memory
+from .tools.memory import get_memory_tools, get_memories_text
 from .tools.python_repl import get_python_repl_tool
 from .tools.web_browsing import get_browser_tools
 
@@ -84,6 +86,7 @@ class Agent():
         python_repl_tool = get_python_repl_tool()
 
         self.tools = [
+            *get_memory_tools(tokenizer=tokenizer),
             python_repl_tool,
         ] + browser_tools
         self.tool_names = [tool.name for tool in self.tools]
@@ -95,6 +98,8 @@ class Agent():
         # Setup prompt template
         class PromptTemplate(StringPromptTemplate):
             def format(self, **kwargs) -> str:
+                prompt_template = Config.agent.prompt_template
+
                 timezone = pytz.timezone(Config.timezone)
                 local_time = datetime.datetime.now(timezone)
                 date_str = local_time.strftime('%Y-%m-%d')
@@ -124,12 +129,27 @@ class Agent():
                 kwargs["knowledge_cutoff_date"] = '2021-01-01'
                 kwargs["timezone"] = Config.timezone
 
+                kwargs['memories'] = get_memories_text(
+                    kwargs['input'],
+                    tokenizer=tokenizer,
+                )
+
+                if not kwargs['memories']:
+                    prompt_template = prompt_template.replace(
+                        r'%%MEMORIES%%', ''
+                    )
+                else:
+                    prompt_template = prompt_template.replace(
+                        r'%%MEMORIES%%',
+                        Config.agent.memories_template.format(**kwargs) + '\n'
+                    )
+
                 if not kwargs.get('history'):
-                    prompt_template = Config.agent.prompt_template.replace(
+                    prompt_template = prompt_template.replace(
                         r'%%HISTORY%%', ''
                     )
                 else:
-                    prompt_template = Config.agent.prompt_template.replace(
+                    prompt_template = prompt_template.replace(
                         r'%%HISTORY%%',
                         Config.agent.history_template.format(**kwargs) + '\n'
                     )

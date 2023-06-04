@@ -68,7 +68,7 @@ class GoogleSearchToolInput(BaseModel):
 
 class GoogleSearchTool(OriginalNavigateTool):
     name: str = "browser_google_search"
-    description: str = "Search the specified keywords on Google. Do not use this if unnecessary, prefer other tools first and think if you can do it without Google. Also, do not use this tool to do translations."
+    description: str = "Search the specified keywords on Google. Do not use this if unnecessary, prefer other tools first and think if you can do it without Google. Also, do not use this tool to do translations. This tool should only be used as a last resort if you can't find any available data from your memory or other tools."
     args_schema: Type[BaseModel] = GoogleSearchToolInput
 
     async def _arun(
