@@ -16,3 +16,4 @@ class AgentConfig:
     prompt_template: str = ''
     history_template: str = ''
     memories_template: str = ''
+    pre_taken_actions_template: str = ''

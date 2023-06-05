@@ -146,6 +146,13 @@ class Agent():
                     kwargs['history'] = \
                         Config.agent.history_template.format(**kwargs) + '\n'
 
+                kwargs['pre_taken_actions'] = \
+                    kwargs['memories']
+
+                if kwargs['pre_taken_actions'] and Config.agent.pre_taken_actions_template:
+                    kwargs['pre_taken_actions'] = \
+                        Config.agent.pre_taken_actions_template.format(**kwargs) + '\n'
+
                 prompt = prompt_template.format(**kwargs)
 
                 tokenized_prompt = tokenizer.encode(prompt)
