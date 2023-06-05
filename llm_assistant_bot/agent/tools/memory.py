@@ -29,7 +29,12 @@ def get_memory_tools(tokenizer):
         if not isinstance(text, str):
             return 'Error: The input of this tool must be a string.'
         text = get_memories_text(text, tokenizer=tokenizer)
-        text += '\nNote that newer memories should override older ones if they have conflicts.'
+        if text:
+            text += '\nNote that newer memories should override older ones if they have conflicts. It is possible that the above memories does not provide sufficient information about the topic you specified, in such case, you need to change your input or use other tools to find information.'
+        else:
+            text = 'No related memories found.'
+        return text
+
         return text
 
     async def check_memory_arun(text):
@@ -37,7 +42,7 @@ def get_memory_tools(tokenizer):
 
     check_memory_tool = Tool(
         name="check_memory",
-        description="Use this tool to check if you have memories related to the specified topic. You do not need to check your memory against the user's current message, as it's already done automatically.",
+        description="Use this tool to check if you have memories related to the specified topic. This should be the first priority to find information. You do not need to check your memory against the user's current message, as it's already done automatically.",
         func=check_memory_run,
         coroutine=check_memory_arun,
     )

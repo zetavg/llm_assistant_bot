@@ -19,6 +19,7 @@ import tiktoken
 from ..config import Config
 from ..db import query_memory
 from .tools.memory import get_memory_tools, get_memories_text
+from .tools.docs import get_docs_tools
 from .tools.python_repl import get_python_repl_tool
 from .tools.web_browsing import get_browser_tools
 
@@ -87,6 +88,7 @@ class Agent():
 
         self.tools = [
             *get_memory_tools(tokenizer=tokenizer),
+            *get_docs_tools(tokenizer=tokenizer),
             python_repl_tool,
         ] + browser_tools
         self.tool_names = [tool.name for tool in self.tools]

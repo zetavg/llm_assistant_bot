@@ -58,7 +58,7 @@ agent:
     Reply the message as best you can. You have access to the following tools:
 
     {tools}
-    {memories}
+
     Use the following format to draft your reply:
 
     ```
@@ -96,7 +96,7 @@ agent:
     Knowledge cutoff: {knowledge_cutoff_date}
     Current date: {current_date}
     Time zone: {timezone}
-
+    {memories}
     Begin:
     {agent_scratchpad}
 

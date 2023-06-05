@@ -95,3 +95,72 @@ def delete_memory(ids):
 
 def get_current_timestamp():
     return int(time.time())
+
+
+def get_docs_collection():
+    return client.get_or_create_collection(
+        name="docs",
+        embedding_function=get_embedding_function()
+    )
+
+
+def add_docs(type_, docs):
+    timestamp = get_current_timestamp()
+    text_list = []
+    ids = []
+    metadatas = []
+
+    for d in docs:
+        ids.append(get_random_hex())
+        text_list.append(d.page_content)
+        metadatas.append({
+            **d.metadata,
+            '_type': type_,
+            'saved_at': timestamp,
+        })
+
+    docs_collection = get_docs_collection()
+    docs_collection.add(
+        documents=text_list,
+        ids=ids,
+        metadatas=metadatas,
+    )
+    client.persist()
+
+
+def query_docs(query_list, n_results=10):
+    if not isinstance(query_list, list):
+        query_list = [query_list]
+
+    docs_collection = get_docs_collection()
+    if docs_collection.count() <= 0:
+        return []
+
+    results = docs_collection.query(
+        query_texts=query_list,
+        n_results=n_results,
+    )
+
+    return [
+        {
+            'id': doc_id,
+            'document': document,
+            'metadata': metadata,
+            'distance': distance,
+        }
+        for doc_id, document, metadata, distance
+        in zip(
+            results['ids'][0],
+            (results['documents'] or [])[0],
+            (results['metadatas'] or [])[0],
+            (results['distances'] or [])[0],
+        )
+    ]
+
+
+def delete_docs_by_type(type_):
+    docs_collection = get_docs_collection()
+    docs_collection.delete(
+        where={'_type': type_}
+    )
+    client.persist()

@@ -47,15 +47,15 @@ class NavigateTool(OriginalNavigateTool):
             html_content = await page.content()
 
             doc = Document(html_content)
-            output += f'\n----\nPreview:\n{doc.title()}\n{markdownify(doc.summary())}'
+            output += f'\n----\nContent:\n{doc.title()}\n{markdownify(doc.summary())}'
 
-            output = output[:1024]
+            # output = output[:1024]
 
             output_for_logging = output.replace('\n', '\\n')[:200]
             logger.debug(f"Results of '{url}': {output_for_logging}")
 
             output += '\n----\n'
-            output += "Hint: you can use the browser_extract_current_page_text tool to get the full content of this page"
+            # output += "Hint: you can use the browser_extract_current_page_text tool to get the full content of this page"
 
             return output
         except Exception as e:
@@ -245,7 +245,7 @@ browser_tools_classes: List[Type[BaseBrowserTool]] = [
     GoogleSearchTool,
     NavigateTool,
     # NavigateBackTool,
-    GetPageContentTool,
+    # GetPageContentTool,
     # ExtractHyperlinksTool,
     # GetElementsTool,
     # CurrentWebPageTool,

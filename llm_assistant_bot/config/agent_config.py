@@ -7,6 +7,9 @@ class AgentConfig:
     memory_top_n: int = 8
     memory_max_distance: float = 0.5
     memory_max_token_limit: int = 100
+    docs_top_n: int = 8
+    docs_max_distance: float = 0.5
+    docs_max_token_limit: int = 100
 
     llm_type: str = 'openai'
     llm_model_name: str = 'text-davinci-003'
